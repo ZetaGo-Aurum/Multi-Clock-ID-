@@ -113,6 +113,9 @@
       font-weight: bold;
       color: #39ff14;
       text-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     
     /* PANEL UNTUK OSILOSKOP, RADAR BULAN/MATAHARI, & INFO */
@@ -250,6 +253,7 @@
     <div class="mode-section active" id="clock-mode">
       <div class="clock-container">
         <div class="clock-grid">
+          <!-- Urutan segmen: Eon, Era, Periode (Quaternary) -->
           <div class="segment" data-info="Eon merupakan satuan waktu terbesar dalam skala geologis. Contoh: Holocene.">
             <div class="label">Eon</div>
             <div class="value" id="eon">Holocene</div>
@@ -262,6 +266,28 @@
             <div class="label">Periode</div>
             <div class="value" id="period">Quaternary</div>
           </div>
+          <!-- Tambahan segmen baru ditempatkan sebelum segmen Tahun -->
+          <div class="segment" data-info="1 milenium = 1000 tahun. Menunjukkan urutan milenium saat ini.">
+            <div class="label">Milenium</div>
+            <div class="value" id="millennium">-</div>
+          </div>
+          <div class="segment" data-info="1 abad = 100 tahun. Menunjukkan urutan abad saat ini.">
+            <div class="label">Abad</div>
+            <div class="value" id="century">-</div>
+          </div>
+          <div class="segment" data-info="1 dekade = 10 tahun. Menunjukkan urutan dekade saat ini.">
+            <div class="label">Dekade</div>
+            <div class="value" id="decade">-</div>
+          </div>
+          <div class="segment" data-info="1 windu = 8 tahun. Menunjukkan urutan windu saat ini.">
+            <div class="label">Windu</div>
+            <div class="value" id="windu">-</div>
+          </div>
+          <div class="segment" data-info="1 lustrum = 5 tahun. Menunjukkan urutan lustrum saat ini.">
+            <div class="label">Lustrum</div>
+            <div class="value" id="lustrum">-</div>
+          </div>
+          <!-- Lanjut ke segmen waktu standar -->
           <div class="segment" data-info="Tahun: Kalender modern.">
             <div class="label">Tahun</div>
             <div class="value" id="year">2025</div>
@@ -362,7 +388,9 @@
     /* ----------- PEMBARUAN JAM DIGITAL ----------- */
     function updateDigitalClock() {
       const now = new Date();
-      document.getElementById('year').textContent = now.getFullYear();
+      const year = now.getFullYear();
+      
+      document.getElementById('year').textContent = year;
       const mon = now.getMonth() + 1;
       document.getElementById('month').textContent = mon < 10 ? '0' + mon : mon;
       const dat = now.getDate();
@@ -375,6 +403,19 @@
       document.getElementById('second').textContent = sec < 10 ? '0' + sec : sec;
       const ms = now.getMilliseconds();
       document.getElementById('millisecond').textContent = ms.toString().padStart(3, '0');
+      
+      // Hitung tambahan waktu:
+      const millennium = Math.floor((year - 1) / 1000) + 1;
+      const century = Math.floor((year - 1) / 100) + 1;
+      const decade = Math.floor((year - 1) / 10) + 1;
+      const windu = Math.floor((year - 1) / 8) + 1;
+      const lustrum = Math.floor((year - 1) / 5) + 1;
+      
+      document.getElementById('millennium').textContent = millennium;
+      document.getElementById('century').textContent = century;
+      document.getElementById('decade').textContent = decade;
+      document.getElementById('windu').textContent = windu;
+      document.getElementById('lustrum').textContent = lustrum;
     }
     setInterval(updateDigitalClock, 10);
     updateDigitalClock();
@@ -450,10 +491,7 @@
     
     // Fungsi untuk menghitung offset marker berdasarkan elevasi
     function computeOffset(elevationDeg) {
-      // Clamp elevasi antara 0 dan 90
       let elev = Math.max(0, Math.min(elevationDeg, 90));
-      // Jika elevasi tinggi (90°) marker dekat ke tengah (offset minimum 40)
-      // Jika rendah (0°) marker mendekati pinggiran (maksimum miniRadius - 20)
       return 40 + (1 - (elev / 90)) * (miniRadius - 60);
     }
     
@@ -461,19 +499,14 @@
       const now = new Date();
       let azimuthMoonDeg, elevationMoonDeg, azimuthSunDeg, elevationSunDeg;
       
-      // Jika data lokasi tersedia, gunakan SunCalc untuk hitung posisi nyata
       if (userLat !== null && userLon !== null) {
-        // Hitung posisi Bulan
         const moonPos = SunCalc.getMoonPosition(now, userLat, userLon);
-        // SunCalc mengembalikan azimuth dari selatan, jadi kita konversi ke utara:
         azimuthMoonDeg = ((moonPos.azimuth + Math.PI) * 180 / Math.PI) % 360;
         elevationMoonDeg = moonPos.altitude * 180 / Math.PI;
-        // Hitung posisi Matahari
         const sunPos = SunCalc.getPosition(now, userLat, userLon);
         azimuthSunDeg = ((sunPos.azimuth + Math.PI) * 180 / Math.PI) % 360;
         elevationSunDeg = sunPos.altitude * 180 / Math.PI;
       } else {
-        // Fallback dummy (jika belum dapat lokasi)
         const hours = now.getHours();
         const minutes = now.getMinutes();
         azimuthMoonDeg = (hours * 15 + minutes * 0.25) % 360;
@@ -482,14 +515,11 @@
         elevationSunDeg = 30 + 20 * Math.sin((hours/12) * Math.PI);
       }
       
-      // Bersihkan canvas
       miniCtx.clearRect(0, 0, miniMoonCanvas.width, miniMoonCanvas.height);
       
-      // Gambar latar kompas
       miniCtx.save();
       miniCtx.translate(miniCx, miniCy);
       
-      // Gambar lingkaran luar kompas
       miniCtx.beginPath();
       miniCtx.arc(0, 0, miniRadius - 10, 0, 2 * Math.PI);
       miniCtx.fillStyle = "#111";
@@ -498,7 +528,6 @@
       miniCtx.lineWidth = 2;
       miniCtx.stroke();
       
-      // Gambar garis panduan tiap 30°
       for(let angle = 0; angle < 360; angle += 30) {
         let rad = angle * Math.PI / 180;
         let x = (miniRadius - 20) * Math.sin(rad);
@@ -511,7 +540,6 @@
         miniCtx.stroke();
       }
       
-      // Gambar label kompas (N, NE, E, SE, S, SW, W, NW)
       const directions = [
         { label: "N", angle: 0 },
         { label: "NE", angle: 45 },
@@ -534,7 +562,6 @@
       });
       miniCtx.restore();
       
-      // Fungsi untuk konversi azimuth ke titik marker dengan offset berdasarkan elevasi
       function computeMarkerPoint(azimuth, elevation) {
         let offset = computeOffset(elevation);
         let rad = azimuth * Math.PI / 180;
@@ -543,11 +570,10 @@
         return {x, y};
       }
       
-      // Gambar marker Bulan
       const moonMarker = computeMarkerPoint(azimuthMoonDeg, elevationMoonDeg);
       miniCtx.beginPath();
       miniCtx.arc(miniCx + moonMarker.x, miniCy + moonMarker.y, 10, 0, 2 * Math.PI);
-      miniCtx.fillStyle = "#FFD700"; // Kuning untuk Bulan
+      miniCtx.fillStyle = "#FFD700";
       miniCtx.fill();
       miniCtx.strokeStyle = "#FFD700";
       miniCtx.lineWidth = 2;
@@ -557,11 +583,10 @@
       miniCtx.textAlign = "center";
       miniCtx.fillText(`B: ${azimuthMoonDeg.toFixed(1)}°`, miniCx + moonMarker.x, miniCy + moonMarker.y - 15);
       
-      // Gambar marker Matahari
       const sunMarker = computeMarkerPoint(azimuthSunDeg, elevationSunDeg);
       miniCtx.beginPath();
       miniCtx.arc(miniCx + sunMarker.x, miniCy + sunMarker.y, 10, 0, 2 * Math.PI);
-      miniCtx.fillStyle = "#FF4500"; // Oranye untuk Matahari
+      miniCtx.fillStyle = "#FF4500";
       miniCtx.fill();
       miniCtx.strokeStyle = "#FF4500";
       miniCtx.lineWidth = 2;
@@ -571,14 +596,12 @@
       miniCtx.textAlign = "center";
       miniCtx.fillText(`M: ${azimuthSunDeg.toFixed(1)}°`, miniCx + sunMarker.x, miniCy + sunMarker.y - 15);
       
-      // Tampilkan nilai elevasi pada tengah bawah canvas
       miniCtx.font = "14px Orbitron";
       miniCtx.fillStyle = "#39ff14";
       miniCtx.textAlign = "center";
       miniCtx.fillText(`Elevasi Bulan: ${elevationMoonDeg.toFixed(1)}°`, miniCx, miniCy + miniRadius/2);
       miniCtx.fillText(`Elevasi Matahari: ${elevationSunDeg.toFixed(1)}°`, miniCx, miniCy + miniRadius/2 + 20);
       
-      // Perbarui informasi teks di bawah canvas
       document.getElementById("moonFinderInfo").textContent =
         `Bulan: Azimuth ${azimuthMoonDeg.toFixed(1)}°, Elevasi ${elevationMoonDeg.toFixed(1)}° | ` +
         `Matahari: Azimuth ${azimuthSunDeg.toFixed(1)}°, Elevasi ${elevationSunDeg.toFixed(1)}°`;
