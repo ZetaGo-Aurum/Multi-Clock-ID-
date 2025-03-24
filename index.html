@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Multi Mode: Jam Digital, Osiloskop & Mini Pencari Bulan, & Info Lunar/Orbit</title>
+  <title>Multi Mode: Jam Digital, Osiloskop & Radar Bulan/Matahari, & Info Lunar/Orbit</title>
   <!-- Menggunakan font digital -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
   <!-- Tambahkan SunCalc untuk hitung posisi bulan & matahari -->
@@ -115,7 +115,7 @@
       text-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14;
     }
     
-    /* PANEL UNTUK OSILOSKOP, MINI PENCARI BULAN, & INFO */
+    /* PANEL UNTUK OSILOSKOP, RADAR BULAN/MATAHARI, & INFO */
     .panel {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.2);
@@ -240,7 +240,7 @@
   <div class="navbar">
     <div class="mode-selector">
       <button class="mode-button active" data-mode="clock">Jam Digital</button>
-      <button class="mode-button" data-mode="oscilloscope">Osiloskop &amp; Bulan</button>
+      <button class="mode-button" data-mode="oscilloscope">Osiloskop &amp; Radar</button>
       <button class="mode-button" data-mode="info">Info Lunar/Orbit</button>
     </div>
   </div>
@@ -294,7 +294,7 @@
       </div>
     </div>
     
-    <!-- MODE 2: OSILOSKOP & MINI PENCARI BULAN -->
+    <!-- MODE 2: OSILOSKOP & RADAR BULAN/MATAHARI -->
     <div class="mode-section" id="oscilloscope-mode">
       <!-- Panel Osiloskop -->
       <div class="panel">
@@ -302,9 +302,9 @@
         <div class="indicator" id="oscIndicator">Sinyal: 0.00</div>
         <canvas id="oscilloscope" width="350" height="100"></canvas>
       </div>
-      <!-- Panel Mini Pencari Bulan -->
+      <!-- Panel Radar Bulan/Matahari -->
       <div class="panel">
-        <h2>Mini Pencari Bulan</h2>
+        <h2>Radar Bulan/Matahari</h2>
         <canvas id="miniMoonFinder" width="350" height="350"></canvas>
         <div class="indicator" id="moonFinderInfo">Menghitung...</div>
       </div>
@@ -426,7 +426,7 @@
     }
     updateOscilloscope();
     
-    /* ----------- MINI PENCARI BULAN DENGAN GPS ----------- */
+    /* ----------- RADAR BULAN/MATAHARI DENGAN GPS & SUNCALC ----------- */
     let userLat = null, userLon = null;
     
     // Dapatkan lokasi pengguna via Geolocation API
@@ -447,6 +447,15 @@
     const miniRadius = miniMoonCanvas.width / 2;
     const miniCx = miniMoonCanvas.width / 2;
     const miniCy = miniMoonCanvas.height / 2;
+    
+    // Fungsi untuk menghitung offset marker berdasarkan elevasi
+    function computeOffset(elevationDeg) {
+      // Clamp elevasi antara 0 dan 90
+      let elev = Math.max(0, Math.min(elevationDeg, 90));
+      // Jika elevasi tinggi (90°) marker dekat ke tengah (offset minimum 40)
+      // Jika rendah (0°) marker mendekati pinggiran (maksimum miniRadius - 20)
+      return 40 + (1 - (elev / 90)) * (miniRadius - 60);
+    }
     
     function updateMiniMoonFinder() {
       const now = new Date();
@@ -525,16 +534,17 @@
       });
       miniCtx.restore();
       
-      // Fungsi untuk konversi azimuth ke titik marker
-      function computeMarkerPoint(azimuth, offset) {
+      // Fungsi untuk konversi azimuth ke titik marker dengan offset berdasarkan elevasi
+      function computeMarkerPoint(azimuth, elevation) {
+        let offset = computeOffset(elevation);
         let rad = azimuth * Math.PI / 180;
-        let x = (miniRadius - offset) * Math.sin(rad);
-        let y = -(miniRadius - offset) * Math.cos(rad);
+        let x = offset * Math.sin(rad);
+        let y = -offset * Math.cos(rad);
         return {x, y};
       }
       
       // Gambar marker Bulan
-      const moonMarker = computeMarkerPoint(azimuthMoonDeg, 40);
+      const moonMarker = computeMarkerPoint(azimuthMoonDeg, elevationMoonDeg);
       miniCtx.beginPath();
       miniCtx.arc(miniCx + moonMarker.x, miniCy + moonMarker.y, 10, 0, 2 * Math.PI);
       miniCtx.fillStyle = "#FFD700"; // Kuning untuk Bulan
@@ -548,7 +558,7 @@
       miniCtx.fillText(`B: ${azimuthMoonDeg.toFixed(1)}°`, miniCx + moonMarker.x, miniCy + moonMarker.y - 15);
       
       // Gambar marker Matahari
-      const sunMarker = computeMarkerPoint(azimuthSunDeg, 40);
+      const sunMarker = computeMarkerPoint(azimuthSunDeg, elevationSunDeg);
       miniCtx.beginPath();
       miniCtx.arc(miniCx + sunMarker.x, miniCy + sunMarker.y, 10, 0, 2 * Math.PI);
       miniCtx.fillStyle = "#FF4500"; // Oranye untuk Matahari
@@ -570,7 +580,8 @@
       
       // Perbarui informasi teks di bawah canvas
       document.getElementById("moonFinderInfo").textContent =
-        `Bulan: Azimuth ${azimuthMoonDeg.toFixed(1)}°, Elevasi ${elevationMoonDeg.toFixed(1)}° | Matahari: Azimuth ${azimuthSunDeg.toFixed(1)}°, Elevasi ${elevationSunDeg.toFixed(1)}°`;
+        `Bulan: Azimuth ${azimuthMoonDeg.toFixed(1)}°, Elevasi ${elevationMoonDeg.toFixed(1)}° | ` +
+        `Matahari: Azimuth ${azimuthSunDeg.toFixed(1)}°, Elevasi ${elevationSunDeg.toFixed(1)}°`;
     }
     setInterval(updateMiniMoonFinder, 1000);
     updateMiniMoonFinder();
