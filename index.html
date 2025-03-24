@@ -16,7 +16,6 @@
       background: linear-gradient(135deg, #0d0d0d, #1a1a1a);
       font-family: 'Orbitron', sans-serif;
       color: #fff;
-      padding: 0;
       display: flex;
       flex-direction: column;
       min-height: 100vh;
@@ -118,7 +117,7 @@
       white-space: nowrap;
     }
     
-    /* PANEL UNTUK OSILOSKOP, RADAR BULAN/MATAHARI, & INFO */
+    /* PANEL UNTUK OSILOSKOP, RADAR, & INFO */
     .panel {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.2);
@@ -145,7 +144,7 @@
       height: auto;
     }
     
-    /* PANEL UNTUK INFORMASI TAMBAHAN (Lunar/Orbit) */
+    /* PANEL UNTUK INFO TAMBAHAN (Lunar/Orbit) */
     .info {
       text-align: center;
     }
@@ -320,7 +319,7 @@
       </div>
     </div>
     
-    <!-- MODE 2: OSILOSKOP & RADAR BULAN/MATAHARI -->
+    <!-- MODE 2: OSILOSKOP & RADAR -->
     <div class="mode-section" id="oscilloscope-mode">
       <!-- Panel Osiloskop -->
       <div class="panel">
@@ -361,6 +360,11 @@
           <div class="label">Orbit Bumi</div>
           <div class="value" id="earthOrbits">0</div>
         </div>
+      </div>
+      <!-- Panel Visualisasi Orbit -->
+      <div class="panel">
+        <h2>Visualisasi Orbit</h2>
+        <canvas id="orbitCanvas" width="350" height="350"></canvas>
       </div>
     </div>
   </div>
@@ -404,7 +408,7 @@
       const ms = now.getMilliseconds();
       document.getElementById('millisecond').textContent = ms.toString().padStart(3, '0');
       
-      // Hitung tambahan waktu:
+      // Hitung tambahan waktu dengan epoch yang baru
       const millennium = Math.floor((year - 1) / 1000) + 1;
       const century = Math.floor((year - 1) / 100) + 1;
       const decade = Math.floor((year - 1) / 10) + 1;
@@ -469,8 +473,6 @@
     
     /* ----------- RADAR BULAN/MATAHARI DENGAN GPS & SUNCALC ----------- */
     let userLat = null, userLon = null;
-    
-    // Dapatkan lokasi pengguna via Geolocation API
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(position) {
         userLat = position.coords.latitude;
@@ -489,7 +491,6 @@
     const miniCx = miniMoonCanvas.width / 2;
     const miniCy = miniMoonCanvas.height / 2;
     
-    // Fungsi untuk menghitung offset marker berdasarkan elevasi
     function computeOffset(elevationDeg) {
       let elev = Math.max(0, Math.min(elevationDeg, 90));
       return 40 + (1 - (elev / 90)) * (miniRadius - 60);
@@ -498,7 +499,6 @@
     function updateMiniMoonFinder() {
       const now = new Date();
       let azimuthMoonDeg, elevationMoonDeg, azimuthSunDeg, elevationSunDeg;
-      
       if (userLat !== null && userLon !== null) {
         const moonPos = SunCalc.getMoonPosition(now, userLat, userLon);
         azimuthMoonDeg = ((moonPos.azimuth + Math.PI) * 180 / Math.PI) % 360;
@@ -516,7 +516,6 @@
       }
       
       miniCtx.clearRect(0, 0, miniMoonCanvas.width, miniMoonCanvas.height);
-      
       miniCtx.save();
       miniCtx.translate(miniCx, miniCy);
       
@@ -571,6 +570,10 @@
       }
       
       const moonMarker = computeMarkerPoint(azimuthMoonDeg, elevationMoonDeg);
+      // Set transparansi jika Bulan sudah di bawah horizon
+      let moonAlpha = elevationMoonDeg < 0 ? 0.3 : 1;
+      miniCtx.save();
+      miniCtx.globalAlpha = moonAlpha;
       miniCtx.beginPath();
       miniCtx.arc(miniCx + moonMarker.x, miniCy + moonMarker.y, 10, 0, 2 * Math.PI);
       miniCtx.fillStyle = "#FFD700";
@@ -582,8 +585,12 @@
       miniCtx.fillStyle = "#FFD700";
       miniCtx.textAlign = "center";
       miniCtx.fillText(`B: ${azimuthMoonDeg.toFixed(1)}°`, miniCx + moonMarker.x, miniCy + moonMarker.y - 15);
+      miniCtx.restore();
       
       const sunMarker = computeMarkerPoint(azimuthSunDeg, elevationSunDeg);
+      let sunAlpha = elevationSunDeg < 0 ? 0.3 : 1;
+      miniCtx.save();
+      miniCtx.globalAlpha = sunAlpha;
       miniCtx.beginPath();
       miniCtx.arc(miniCx + sunMarker.x, miniCy + sunMarker.y, 10, 0, 2 * Math.PI);
       miniCtx.fillStyle = "#FF4500";
@@ -595,6 +602,7 @@
       miniCtx.fillStyle = "#FF4500";
       miniCtx.textAlign = "center";
       miniCtx.fillText(`M: ${azimuthSunDeg.toFixed(1)}°`, miniCx + sunMarker.x, miniCy + sunMarker.y - 15);
+      miniCtx.restore();
       
       miniCtx.font = "14px Orbitron";
       miniCtx.fillStyle = "#39ff14";
@@ -609,32 +617,101 @@
     setInterval(updateMiniMoonFinder, 1000);
     updateMiniMoonFinder();
     
-    /* ----------- INFORMASI TAMBAHAN: Info Lunar/Orbit ----------- */
+    /* ----------- INFORMASI TAMBAHAN: Info Lunar/Orbit & Visualisasi Orbit ----------- */
     function updateAdditionalDetails() {
       const now = new Date();
       const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
       document.getElementById("dayNameInfo").textContent = dayNames[now.getDay()];
       
-      const moonCycle = 29.53;
+      // Perhitungan orbit Bulan berdasarkan referensi New Moon
+      const moonCycle = 29.53; // dalam hari
       const referenceNewMoon = new Date("2000-01-06T18:14:00Z");
-      const daysSinceReference = (now - referenceNewMoon) / (1000 * 60 * 60 * 24);
-      const currentMoonPhase = daysSinceReference % moonCycle;
-      let phaseName = "";
-      if (currentMoonPhase < 1) phaseName = "Bulan Baru";
-      else if (currentMoonPhase < 7.4) phaseName = "Kuartal Pertama";
-      else if (currentMoonPhase < 14.8) phaseName = "Bulan Purnama";
-      else if (currentMoonPhase < 22.1) phaseName = "Kuartal Terakhir";
-      else phaseName = "Bulan Baru";
-      document.getElementById("moonPhase").textContent = phaseName;
+      const daysSinceMoon = (now - referenceNewMoon) / (1000 * 60 * 60 * 24);
+      const moonOrbits = daysSinceMoon / moonCycle;
+      document.getElementById("moonOrbits").textContent = moonOrbits.toFixed(2);
       
-      const moonOrbits = Math.floor(daysSinceReference / moonCycle);
-      document.getElementById("moonOrbits").textContent = moonOrbits;
-      
-      const earthOrbits = now.getFullYear() - 2000;
-      document.getElementById("earthOrbits").textContent = earthOrbits;
-     }
+      // Perhitungan orbit Bumi berdasarkan referensi awal orbit (misal 2000-01-01)
+      const referenceEarthOrbit = new Date("2000-01-01T00:00:00Z");
+      const earthOrbitPeriod = 365.25636; // hari sideris
+      const daysSinceEarth = (now - referenceEarthOrbit) / (1000 * 60 * 60 * 24);
+      const earthOrbits = daysSinceEarth / earthOrbitPeriod;
+      document.getElementById("earthOrbits").textContent = earthOrbits.toFixed(2);
+    }
     setInterval(updateAdditionalDetails, 1000);
     updateAdditionalDetails();
+    
+    // Visualisasi Orbit
+    const orbitCanvas = document.getElementById("orbitCanvas");
+    const orbitCtx = orbitCanvas.getContext("2d");
+    const orbitCenterX = orbitCanvas.width / 2;
+    const orbitCenterY = orbitCanvas.height / 2;
+    const earthOrbitRadius = 100;
+    const moonOrbitRadius = 30;
+    
+    function updateOrbitVisualization() {
+      orbitCtx.clearRect(0, 0, orbitCanvas.width, orbitCanvas.height);
+      
+      // Gambar Matahari di tengah
+      orbitCtx.beginPath();
+      orbitCtx.arc(orbitCenterX, orbitCenterY, 20, 0, 2 * Math.PI);
+      orbitCtx.fillStyle = "#FFA500";
+      orbitCtx.fill();
+      orbitCtx.strokeStyle = "#FFA500";
+      orbitCtx.lineWidth = 2;
+      orbitCtx.stroke();
+      
+      // Hitung posisi Bumi
+      const now = new Date();
+      const referenceEarthOrbit = new Date("2000-01-01T00:00:00Z");
+      const earthOrbitPeriod = 365.25636; // hari
+      const daysSinceEarth = (now - referenceEarthOrbit) / (1000 * 60 * 60 * 24);
+      const earthAngle = (daysSinceEarth / earthOrbitPeriod) * 2 * Math.PI;
+      const earthX = orbitCenterX + earthOrbitRadius * Math.cos(earthAngle);
+      const earthY = orbitCenterY + earthOrbitRadius * Math.sin(earthAngle);
+      
+      // Gambar orbit Bumi (lingkaran)
+      orbitCtx.beginPath();
+      orbitCtx.arc(orbitCenterX, orbitCenterY, earthOrbitRadius, 0, 2 * Math.PI);
+      orbitCtx.strokeStyle = "#39ff14";
+      orbitCtx.lineWidth = 1;
+      orbitCtx.stroke();
+      
+      // Gambar Bumi
+      orbitCtx.beginPath();
+      orbitCtx.arc(earthX, earthY, 15, 0, 2 * Math.PI);
+      orbitCtx.fillStyle = "#00BFFF";
+      orbitCtx.fill();
+      orbitCtx.strokeStyle = "#00BFFF";
+      orbitCtx.lineWidth = 2;
+      orbitCtx.stroke();
+      
+      // Hitung posisi Bulan (berdasarkan referensi New Moon)
+      const moonCycle = 29.53;
+      const referenceNewMoon = new Date("2000-01-06T18:14:00Z");
+      const daysSinceMoon = (now - referenceNewMoon) / (1000 * 60 * 60 * 24);
+      const moonAngle = (daysSinceMoon / moonCycle) * 2 * Math.PI;
+      const moonX = earthX + moonOrbitRadius * Math.cos(moonAngle);
+      const moonY = earthY + moonOrbitRadius * Math.sin(moonAngle);
+      
+      // Gambar orbit Bulan (lingkaran)
+      orbitCtx.beginPath();
+      orbitCtx.arc(earthX, earthY, moonOrbitRadius, 0, 2 * Math.PI);
+      orbitCtx.strokeStyle = "#FFD700";
+      orbitCtx.lineWidth = 1;
+      orbitCtx.stroke();
+      
+      // Gambar Bulan
+      orbitCtx.beginPath();
+      orbitCtx.arc(moonX, moonY, 8, 0, 2 * Math.PI);
+      orbitCtx.fillStyle = "#FFD700";
+      orbitCtx.fill();
+      orbitCtx.strokeStyle = "#FFD700";
+      orbitCtx.lineWidth = 2;
+      orbitCtx.stroke();
+      
+      requestAnimationFrame(updateOrbitVisualization);
+    }
+    updateOrbitVisualization();
   </script> 
 </body>
 </html>
